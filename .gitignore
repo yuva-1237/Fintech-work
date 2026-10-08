@@ -1,0 +1,29 @@
+# Node & Dependencies
+node_modules/
+dist/
+build/
+.npm/
+
+# Environment Variables & Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Logs & Storage
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+uploads/
+quarantine/
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+.stryker-tmp/
+
+# OS Clutter
+.DS_Store
+Thumbs.db
