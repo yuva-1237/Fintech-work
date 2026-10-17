@@ -1,0 +1,350 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------- ENUMS -----------------
+enum Role {
+  SUPER_ADMIN
+  FACULTY_ADMIN
+  MENTOR
+  TEAM_LEAD
+  STUDENT
+  MAGAZINE_EDITOR
+  MANAGEMENT_VIEWER
+  PUBLIC_VISITOR
+}
+
+enum ApplicationStatus {
+  PENDING
+  CLARIFICATION_REQUIRED
+  APPROVED
+  REJECTED
+  SUSPENDED
+  INACTIVE
+}
+
+enum ProjectStatus {
+  PROPOSED
+  APPROVED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  SUBMITTED
+  REVIEWED
+  COMPLETED
+}
+
+enum WeeklyUpdateStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  VERIFIED
+}
+
+enum HackathonStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REGISTERED
+  PARTICIPATED
+  RESULT_SUBMITTED
+  VERIFIED
+  PUBLISHED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  UNDER_REVIEW
+  CORRECTION_REQUIRED
+  VERIFIED
+  RESTRICTED
+}
+
+enum MagazineArticleStatus {
+  DRAFT
+  SUBMITTED
+  EDITING
+  REVISION_REQUIRED
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+// ----------------- ENTITIES -----------------
+
+model UserAccount {
+  id               String              @id @default(uuid())
+  email            String              @unique
+  passwordHash     String
+  role             Role                @default(STUDENT)
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  studentProfile   StudentProfile?
+  assignedProjects ProjectMembership[]
+  mentoredProjects Project[]           @relation("ProjectMentor")
+  weeklyUpdates    WeeklyUpdate[]
+  reviewsGiven     MentorReview[]
+  contributions    ContributionLog[]
+  hackathonTeams   HackathonMember[]
+  ledHackathons    Hackathon[]         @relation("TeamLead")
+  articles         MagazineArticle[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]          @relation("ActorLogs")
+}
+
+model StudentProfile {
+  id               String       @id @default(uuid())
+  userId           String       @unique
+  user             UserAccount  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String
+  displayName      String
+  registerNumber   String       // Private institutional ID
+  department       String
+  program          String
+  academicYear     String
+  yearOfStudy      Int
+  skills           String[]
+  fintechInterests String[]
+  bio              String?
+  portfolioLinks   Json?        // GitHub, LinkedIn, Website
+  isPublicVisible  Boolean      @default(false)
+  avatarUrl        String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model MembershipApplication {
+  id               String            @id @default(uuid())
+  fullName         String
+  displayName      String
+  email            String            @unique
+  registerNumber   String
+  department       String
+  program          String
+  academicYear     String
+  yearOfStudy      Int
+  skills           String[]
+  fintechInterests String[]
+  priorExperience  String?
+  portfolioLinks   Json?
+  motivation       String
+  hasConsent       Boolean           @default(false)
+  status           ApplicationStatus @default(PENDING)
+  decisionNote     String?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Project {
+  id               String              @id @default(uuid())
+  title            String
+  domain           String
+  abstract         String
+  problemStatement String
+  objectives       String
+  expectedOutcome  String
+  techStack        String[]
+  repoUrl          String?
+  demoUrl          String?
+  status           ProjectStatus       @default(PROPOSED)
+  startDate        DateTime?
+  targetCompletion DateTime?
+  isPublic         Boolean             @default(false)
+  mentorId         String?
+  mentor           UserAccount?        @relation("ProjectMentor", fields: [mentorId], references: [id])
+  members          ProjectMembership[]
+  tasks            Task[]
+  weeklyUpdates    WeeklyUpdate[]
+  contributions    ContributionLog[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+model ProjectMembership {
+  id         String      @id @default(uuid())
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleInTeam String      // Frontend, ML, Backend, Lead
+  joinedAt   DateTime    @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  assignedTo  String?
+  dueDate     DateTime?
+  status      TaskStatus @default(NOT_STARTED)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model ContributionLog {
+  id            String         @id @default(uuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       UserAccount    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  taskArea      String         // Design, coding, research
+  description   String
+  evidenceUrl   String         // Repo PR, screenshot, link
+  periodDate    DateTime
+  status        DocumentStatus @default(UPLOADED)
+  mentorRemarks String?
+  verifiedAt    DateTime?
+  createdAt     DateTime       @default(now())
+}
+
+model WeeklyUpdate {
+  id             String             @id @default(uuid())
+  studentId      String
+  student        UserAccount        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  weekStartDate  DateTime
+  weekEndDate    DateTime
+  plannedTasks   String
+  completedTasks String
+  progressStatus String
+  evidenceLinks  String[]
+  challenges     String?
+  nextWeekPlan   String
+  status         WeeklyUpdateStatus @default(DRAFT)
+  reviews        MentorReview[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model MentorReview {
+  id             String             @id @default(uuid())
+  weeklyUpdateId String
+  weeklyUpdate   WeeklyUpdate       @relation(fields: [weeklyUpdateId], references: [id], onDelete: Cascade)
+  reviewerId     String
+  reviewer       UserAccount        @relation(fields: [reviewerId], references: [id])
+  comments       String
+  decision       WeeklyUpdateStatus // VERIFIED or REVISION_REQUIRED
+  createdAt      DateTime           @default(now())
+}
+
+model Hackathon {
+  id               String                @id @default(uuid())
+  eventName        String
+  organizer        String
+  theme            String
+  problemStatement String?
+  venueMode        String                // Online, In-person, Hybrid
+  eventStartDate   DateTime
+  eventEndDate     DateTime
+  officialUrl      String?
+  teamName         String
+  teamLeadId       String
+  teamLead         UserAccount           @relation("TeamLead", fields: [teamLeadId], references: [id])
+  solutionTitle    String
+  abstract         String?
+  prototypeUrl     String?
+  outcome          String?               // Registered, Winner, Finalist
+  status           HackathonStatus       @default(DRAFT)
+  isVerified       Boolean               @default(false)
+  isPublic         Boolean               @default(false)
+  members          HackathonMember[]
+  documents        DocumentCertificate[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+}
+
+model HackathonMember {
+  id          String      @id @default(uuid())
+  hackathonId String
+  hackathon   Hackathon   @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  userId      String
+  user        UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleInTeam  String?
+}
+
+model DocumentCertificate {
+  id          String         @id @default(uuid())
+  hackathonId String?
+  hackathon   Hackathon?     @relation(fields: [hackathonId], references: [id], onDelete: SetNull)
+  studentId   String
+  fileUrl     String
+  fileName    String
+  fileType    String         // Certificate, Presentation, Final Report
+  status      DocumentStatus @default(UPLOADED)
+  remarks     String?
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  createdAt   DateTime       @default(now())
+}
+
+model MagazineIssue {
+  id          String            @id @default(uuid())
+  volumeNo    Int
+  monthYear   String            // e.g., "October 2026"
+  title       String
+  pdfUrl      String?
+  isPublished Boolean           @default(false)
+  publishedAt DateTime?
+  articles    MagazineArticle[]
+  createdAt   DateTime          @default(now())
+}
+
+model MagazineArticle {
+  id          String                @id @default(uuid())
+  issueId     String?
+  issue       MagazineIssue?        @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  authorId    String
+  author      UserAccount           @relation(fields: [authorId], references: [id])
+  title       String
+  category    String                // Prototype spotlight, Tech explainer, Interview
+  content     String                // Markdown or rich-text
+  status      MagazineArticleStatus @default(DRAFT)
+  editorNotes String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model Notification {
+  id        String      @id @default(uuid())
+  userId    String
+  user      UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String      // APPLICATION, WEEKLY_UPDATE, HACKATHON, MAGAZINE
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+}
+
+model AuditLog {
+  id           String       @id @default(uuid())
+  actorId      String?
+  actor        UserAccount? @relation("ActorLogs", fields: [actorId], references: [id])
+  action       String       // APPROVE_APPLICATION, VERIFY_UPDATE, etc.
+  targetEntity String       // User, WeeklyUpdate, Hackathon
+  targetId     String
+  details      Json?
+  timestamp    DateTime     @default(now())
+}
